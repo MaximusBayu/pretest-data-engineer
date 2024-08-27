@@ -1,0 +1,40 @@
+id: data_cleansing
+namespace: company
+
+inputs:
+  - id: file
+    type: FILE
+
+tasks:
+  - id: clean_data
+    type: io.kestra.plugin.scripts.python.Script
+    inputFiles:
+      input_csv: "{{ inputs.file }}"
+    beforeCommands:
+      - pip install pandas
+    script: |
+      import pandas as pd
+      import re
+
+      # Read the CSV file
+      df = pd.read_csv('{{ inputs.file }}', na_values=['null'])
+
+      # Clean the text columns
+      def clean_text(text):
+          if pd.isna(text):
+            return ''
+          # Convert to lowercase
+          text = text.lower()
+          # Remove extra whitespace
+          text = re.sub(r'\s+', ' ', text).strip()
+          return text
+
+      # Export to CSV
+      df.to_csv('cleaned_data.csv', index=False)
+    outputFiles:
+      - "*.csv"
+
+  - id: read_output
+    type: io.kestra.plugin.scripts.shell.Commands
+    commands:
+      - head -n 5 {{ outputs.clean_data.outputFiles['cleaned_data.csv'] }}
