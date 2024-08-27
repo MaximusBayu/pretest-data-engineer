@@ -1,0 +1,69 @@
+id: sentiment_analysis
+namespace: company
+
+inputs:
+  - id: cleaned_file
+    type: FILE
+
+tasks:
+  - id: analyze_sentiment
+    type: io.kestra.plugin.scripts.python.Script
+    inputFiles:
+      input_csv: "{{ inputs.cleaned_file }}"
+    beforeCommands:
+      - pip install pandas
+    script: |
+      import pandas as pd
+
+      # Read the cleaned CSV file
+      df = pd.read_csv('{{ inputs.cleaned_file }}')
+
+      # Function to determine sentiment based on rating
+      def get_sentiment(rating):
+          if pd.isna(rating):
+              return 'Unknown'
+          rating = float(rating)
+          if rating >= 4:
+              return 'Positive'
+          elif rating >= 3:
+              return 'Neutral'
+          else:
+              return 'Negative'
+
+      df['sentiment'] = df['rating'].apply(get_sentiment)
+
+      # Menghitung persenan tiap kategori
+      sentiment_counts = df['sentiment'].value_counts()
+      total = sentiment_counts.sum()
+      sentiment_percentages = (sentiment_counts / total * 100).round(2)
+
+      # Menyiapkan hasil
+      results = "Sentiment Analysis Results:\n"
+      for sentiment, count in sentiment_counts.items():
+          percentage = sentiment_percentages[sentiment]
+          results += f"{sentiment}: {count} ({percentage}%)\n"
+
+      # Menyimpan hasil ke CSV, txt, and log
+      df[['itemId', 'rating', 'reviewContent', 'sentiment']].to_csv('sentiment_results.csv', index=False)
+      with open('sentiment_summary.txt', 'w') as f:
+          f.write(results)
+      print(results)
+
+    outputFiles:
+      - "*.csv"
+      - "*.txt"
+
+  - id: read_summary
+    type: io.kestra.plugin.scripts.shell.Commands
+    commands:
+      - cat {{ outputs.analyze_sentiment.outputFiles['sentiment_summary.txt'] }}
+
+outputs:
+  - id: sentiment_results
+    type: FILE
+    description: "Detailed sentiment analysis results"
+    value: "{{ outputs.analyze_sentiment.outputFiles['sentiment_results.csv'] }}"
+  - id: sentiment_summary
+    type: FILE
+    description: "Summary of sentiment analysis"
+    value: "{{ outputs.analyze_sentiment.outputFiles['sentiment_summary.txt'] }}"
